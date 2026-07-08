@@ -45,6 +45,7 @@ class BattleKRInserter:
         # 보존하고 ko 만 정규화해 enc(lead)+enc(ko) 로 합치므로 마커가 누락되지 않는다.
         # ko 가 비었거나(비대사) 일본어 잔존(미완성)이면 제외 → 원본(마커+원문) 유지.
         self.uni={}
+        self.enc_fails=[]      # (원문 앞40자, 오류) — 인코딩 실패로 일본어로 남은 토큰
         for x in ents:
             if 'lead' in x:                         # 신형(마커 분리)
                 lead=x.get('lead',''); jp=x.get('jp',''); ko=x.get('ko','')
@@ -61,6 +62,9 @@ class BattleKRInserter:
             if MARK.fullmatch(p): out.append(p); continue
             p=p.replace('…','・・・').replace('...','・・・')
             p=p.replace('—','―').replace('–','―')   # em/en dash → 전각 가로줄(SJIS 가능)
+            # 유사 가운뎃점 → 전각 나카구로(코드표 0x01). U+00B7 등을 방치하면
+            # 인코딩 예외로 그 대사가 통째로 일본어로 남는다(blk305 사례).
+            for dot in '·•∙ㆍ': p=p.replace(dot,'・')
             q=[]
             for ch in p:
                 o=ord(ch)
@@ -110,7 +114,10 @@ class BattleKRInserter:
                                 # 번역이 원본보다 길면 길이보존 불가 → 원문 유지
                             else:
                                 out+=enc; n+=1; continue
-                        except Exception: pass
+                        except Exception as ex:
+                            # 인코딩 실패 = 이 대사가 게임에 일본어로 남는다.
+                            # 조용히 넘기지 말고 기록해 빌드 끝에 경고한다.
+                            self.enc_fails.append((t[1][:40], str(ex)))
                 out+=self.cx.rebuild([t])
             newpool+=out; cur+=len(out)
         nb=bytearray(b[:pool_start])
@@ -162,9 +169,14 @@ class BattleKRInserter:
             A.write_index(self.rom, k, cur - A.IDX_BASE)
             cur=(cur+len(nb)+0xF)&~0xF
         open(out_path,'wb').write(self.rom)
+        if self.enc_fails:
+            print(f"[경고] 인코딩 실패로 일본어로 남은 토큰 {len(self.enc_fails)}개:")
+            for txt,err in self.enc_fails[:10]:
+                print(f"    {txt!r} ← {err}")
         return {'changed':len(changed), 'len_preserved':len(LEN_PRESERVE_BLOCKS),
                 'len_tokens':len_tok, 'tokens':tot_tok, 'dest':dest,
-                'used':cur-dest, 'rom':len(self.rom)}
+                'used':cur-dest, 'rom':len(self.rom),
+                'enc_fails':len(self.enc_fails)}
 
 if __name__=='__main__':
     import sys
