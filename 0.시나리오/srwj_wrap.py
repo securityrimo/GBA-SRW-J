@@ -209,8 +209,10 @@ def fit_turn_lines(kr_text: str, jp_line_count: int,
         warnings.append(
             f'줄 수 초과: 목표 {jp_line_count}줄 → 실제 {len(lines)}줄 '
             f'(한국어가 대사창에 다 안 들어감)')
-    elif len(lines) < jp_line_count:
-        lines = lines + [''] * (jp_line_count - len(lines))
+    # KR이 JP보다 짧게 감겨도 빈 줄로 채우지 않는다.
+    #  (채우면 게임이 마지막=빈 줄 끝에 닫는 괄호 」/) 를 그려 "빈 대사에 닫힘
+    #   괄호만" 뜨는 현상이 생긴다. 대사창은 KR 길이에 맞게 짧아지는 게 자연스럽고,
+    #   닫는 괄호는 실제 마지막 글자 뒤에 붙는다.)
 
     # 최종 폭 점검 (첫 줄·끝 줄 reserve 반영)
     total = len(lines)
